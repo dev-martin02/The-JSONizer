@@ -1,7 +1,8 @@
 const fs = require("fs/promises");
 const contentObj = {};
 
-const filePath = "text.txt";
+// Instead of making it one file try to make it the whole folder
+const filePath = "text.txt"; // if the file is 10mb it takes around 7s
 
 function addContentToObj(data, obj) {
   for (let i = 0; i <= data.length; i++) {
@@ -82,17 +83,20 @@ const transferNewData = async (newFilePath) => {
 
 function convertToJson(key, value) {
   const checkForMultiplesValues = (arg) => {
-    if (arg.includes("||")) {
-      const result = arg.split("||");
-      console.log(result);
+    const val = String(arg);
+    if (val.includes("||")) {
+      const result = val.split("||");
+
       return result;
     }
-    return arg;
+    return val;
   };
 
   if (Array.isArray(checkForMultiplesValues(value))) {
     const newValue = checkForMultiplesValues(value).map((data) => {
-      if (!isNaN(Number(data))) return `${data.trim()}`;
+      if (!isNaN(Number(data))) {
+        return `${Number(data)}`;
+      }
       return `"${data.trim()}"`;
     });
     return `"${key}": [${newValue}]`;
@@ -101,5 +105,5 @@ function convertToJson(key, value) {
   if (isNaN(Number(value))) {
     return `"${key}" : "${checkForMultiplesValues(value)}"`;
   }
-  return `"${key}" : "${checkForMultiplesValues(value)}"`;
+  return `"${key}" : ${Number(checkForMultiplesValues(value))}`;
 }
