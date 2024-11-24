@@ -1,9 +1,7 @@
 const fs = require("fs/promises");
 const contentObj = {};
 
-console.time();
-// Instead of making it one file try to make it the whole folder
-const filePath = "test.txt";
+const filePath = "text.txt";
 
 function addContentToObj(data, obj) {
   for (let i = 0; i <= data.length; i++) {
@@ -17,7 +15,6 @@ function addContentToObj(data, obj) {
       }
     }
   }
-  console.log(obj);
 }
 
 async function readUserFile(path, obj) {
@@ -36,7 +33,7 @@ async function readUserFile(path, obj) {
     throw error.message;
   } finally {
     if (file) {
-      await file.close(); // Make sure to always close the file handle
+      await file.close();
     }
   }
 }
@@ -50,7 +47,6 @@ const transferNewData = async (newFilePath) => {
 
     await jsonFile.appendFile(Buffer.from("{ \r\n"));
     for (const [key, value] of Object.entries(contentObj)) {
-      console.log(convertToJson(key, value));
       if (objKey[objKey.length - 1] === key) {
         await jsonFile.appendFile(
           Buffer.from(`${convertToJson(key, value)} \r\n`)
@@ -81,14 +77,29 @@ const transferNewData = async (newFilePath) => {
     console.log("all done");
   } catch (err) {
     console.log(err);
-  } finally {
-    console.timeEnd();
   }
 })();
 
 function convertToJson(key, value) {
-  if (isNaN(Number(value))) {
-    return `"${key}" : "${value}"`;
+  const checkForMultiplesValues = (arg) => {
+    if (arg.includes("||")) {
+      const result = arg.split("||");
+      console.log(result);
+      return result;
+    }
+    return arg;
+  };
+
+  if (Array.isArray(checkForMultiplesValues(value))) {
+    const newValue = checkForMultiplesValues(value).map((data) => {
+      if (!isNaN(Number(data))) return `${data.trim()}`;
+      return `"${data.trim()}"`;
+    });
+    return `"${key}": [${newValue}]`;
   }
-  return `"${key}" : ${value}`;
+
+  if (isNaN(Number(value))) {
+    return `"${key}" : "${checkForMultiplesValues(value)}"`;
+  }
+  return `"${key}" : "${checkForMultiplesValues(value)}"`;
 }
