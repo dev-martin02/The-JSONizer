@@ -1,24 +1,43 @@
 const fs = require("fs/promises");
-const contentObj = {};
+const contentArr = [];
 
 // Instead of making it one file try to make it the whole folder
+// If the file has double space (Y axis), it means it's a new section
+
 const filePath = "text.txt"; // if the file is 10mb it takes around 7s
 
-function addContentToObj(data, obj) {
-  for (let i = 0; i <= data.length; i++) {
-    if (data[i] == ":") {
-      const key = data.substring(0, i).trim();
-      const value = data.substring(i + 1, data.length).trim();
-      if (isNaN(Number(value))) {
-        obj[key] = value;
-      } else {
-        obj[key] = Number(value);
+function addContentToObj(data, arr) {
+  const segments = data.split("\r\n");
+  let currentObj = {};
+
+  // Go to the whole segment arr and separate the data into obj
+  for (const content of segments) {
+    // If content is equal to an empty string it means is a new line
+    if (content === "") {
+      if (Object.keys(currentObj).length > 0) {
+        arr.push(currentObj);
+        currentObj = {};
+      }
+    } else {
+      if (content.includes(":")) {
+        const key = content.substring(0, content.indexOf(":")).trim();
+        const value = content.substring(content.indexOf(":") + 1);
+
+        if (isNaN(Number(value))) {
+          currentObj[key] = value; // Add as a string if it's not a number
+        } else {
+          currentObj[key] = Number(value); // Add as a number otherwise
+        }
       }
     }
   }
+
+  if (Object.keys(currentObj).length > 0) {
+    arr.push(currentObj);
+  }
 }
 
-async function readUserFile(path, obj) {
+async function readUserFile(path, arr) {
   const file = await fs.open(path, "r");
   try {
     const fileInfo = await file.stat(); // info of our file
@@ -28,8 +47,8 @@ async function readUserFile(path, obj) {
     }
 
     const readFile = await file.read(fileSize, 0, fileSize.byteLength, 0);
-    const content = await readFile.buffer.toString().split("\r\n");
-    content.map((data) => addContentToObj(data, obj));
+    const content = await readFile.buffer.toString();
+    addContentToObj(content, arr);
   } catch (error) {
     throw error.message;
   } finally {
@@ -43,22 +62,34 @@ async function readUserFile(path, obj) {
 const transferNewData = async (newFilePath) => {
   let newFile = newFilePath.replace("txt", "json");
   const jsonFile = await fs.open(newFile, "w");
+
+  let startFile = contentArr.length === 1 ? "{" : "[";
+  let endFile = contentArr.length === 1 ? "}" : "]";
+
+  await jsonFile.appendFile(Buffer.from(`${startFile}\r\n`));
   try {
-    const objKey = Object.keys(contentObj); // all keys in obj
+    for (const objData of contentArr) {
+      if (startFile === "[") await jsonFile.appendFile(Buffer.from("{ \r\n"));
+      const objKey = Object.keys(objData);
 
-    await jsonFile.appendFile(Buffer.from("{ \r\n"));
-    for (const [key, value] of Object.entries(contentObj)) {
-      if (objKey[objKey.length - 1] === key) {
-        await jsonFile.appendFile(
-          Buffer.from(`${convertToJson(key, value)} \r\n`)
-        );
-        await jsonFile.appendFile(Buffer.from("}"));
-
-        return;
+      for (const [key, value] of Object.entries(objData)) {
+        if (objKey[objKey.length - 1] === key) {
+          await jsonFile.appendFile(
+            Buffer.from(`${convertToJson(key, value)} \r\n`)
+          );
+        } else {
+          await jsonFile.appendFile(
+            Buffer.from(`${convertToJson(key, value)}, \r\n`)
+          );
+        }
       }
-      await jsonFile.appendFile(
-        Buffer.from(`${convertToJson(key, value)}, \r\n`)
-      );
+      if (endFile === "]") {
+        if (objData !== contentArr[contentArr.length - 1]) {
+          await jsonFile.appendFile(Buffer.from("}, \r\n"));
+        } else {
+          await jsonFile.appendFile(Buffer.from("} \r\n"));
+        }
+      }
     }
   } catch (error) {
     await fs.unlink(newFile);
@@ -66,6 +97,8 @@ const transferNewData = async (newFilePath) => {
     throw error.message;
   } finally {
     if (jsonFile) {
+      await jsonFile.appendFile(Buffer.from(`${endFile}`));
+
       await jsonFile.close();
     }
   }
@@ -73,7 +106,7 @@ const transferNewData = async (newFilePath) => {
 
 (async () => {
   try {
-    await readUserFile(filePath, contentObj);
+    await readUserFile(filePath, contentArr);
     await transferNewData(filePath);
     console.log("all done");
   } catch (err) {
@@ -103,7 +136,7 @@ function convertToJson(key, value) {
   }
 
   if (isNaN(Number(value))) {
-    return `"${key}" : "${checkForMultiplesValues(value)}"`;
+    return `"${key}":"${checkForMultiplesValues(value)}"`;
   }
-  return `"${key}" : ${Number(checkForMultiplesValues(value))}`;
+  return `"${key}":${Number(checkForMultiplesValues(value))}`;
 }
